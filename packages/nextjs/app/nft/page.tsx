@@ -1,8 +1,9 @@
 
 'use client';
 import { useEffect, useState } from "react";
-import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useScaffoldReadContract, useScaffoldWriteContract, useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useAccount } from "wagmi";
+import { useWriteContracts } from 'wagmi/experimental'
 
 // Get Max Supply for the NFT Collection
 // The first step involves using the useScaffoldReadContract hook to read data from your smart contract. 
@@ -29,6 +30,11 @@ const MintNFT = () => {
     const { writeContractAsync: writeScaffoldContractAsync } = useScaffoldWriteContract("NFT");
     const { address: connectedAddress } = useAccount();
 
+    // wagmi hook to batch write to multiple contracts (EIP-5792 specific)
+    const { writeContractsAsync } = useWriteContracts();
+    // add this later to read address and contract abi
+    const { data: NFT } = useDeployedContractInfo("NFT");
+
     return (
         <div>
             <button
@@ -45,6 +51,36 @@ const MintNFT = () => {
                 }}
             >
                 Mint NFT
+            </button>
+            <button
+                className="btn btn-primary w-45"
+                onClick={async () => {
+                    try {
+                        if (!NFT) return;
+                        // TODO: update the ENV
+                        const paymasterURL = process.env.NEXT_PUBLIC_PAYMASTER_URL;
+                        await writeContractsAsync({
+                            contracts: [
+                                {
+                                    address: NFT.address,
+                                    abi: NFT.abi,
+                                    functionName: "safeMint",
+                                    args: [connectedAddress],
+                                },
+                            ],
+                            capabilities: {
+                                paymasterService: {
+                                    url: paymasterURL,
+                                },
+                            },
+                        });
+                        notification.success("NFT minted");
+                    } catch (e) {
+                        console.error("Error minting NFT:", e);
+                    }
+                }}
+            >
+                Gasless Mint
             </button>
         </div>
     );
